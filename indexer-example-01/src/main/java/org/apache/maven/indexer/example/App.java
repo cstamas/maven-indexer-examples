@@ -19,9 +19,10 @@ import org.apache.maven.index.GroupedSearchResponse;
 import org.apache.maven.index.Grouping;
 import org.apache.maven.index.MAVEN;
 import org.apache.maven.index.NexusIndexer;
-import org.apache.maven.index.SearchType;
 import org.apache.maven.index.context.IndexCreator;
 import org.apache.maven.index.context.IndexingContext;
+import org.apache.maven.index.expr.SourcedSearchExpression;
+import org.apache.maven.index.expr.UserInputSearchExpression;
 import org.apache.maven.index.search.grouping.GAGrouping;
 import org.apache.maven.index.updater.IndexUpdateRequest;
 import org.apache.maven.index.updater.IndexUpdateResult;
@@ -125,8 +126,9 @@ public class App
         BooleanQuery bq;
 
         // Searching for some artifact
-        Query gidQ = nexusIndexer.constructQuery( MAVEN.GROUP_ID, "org.apache.maven.indexer", SearchType.EXACT );
-        Query aidQ = nexusIndexer.constructQuery( MAVEN.ARTIFACT_ID, "indexer-artifact", SearchType.EXACT );
+        Query gidQ =
+            nexusIndexer.constructQuery( MAVEN.GROUP_ID, new SourcedSearchExpression( "org.apache.maven.indexer" ) );
+        Query aidQ = nexusIndexer.constructQuery( MAVEN.ARTIFACT_ID, new SourcedSearchExpression( "indexer-artifact" ) );
 
         bq = new BooleanQuery();
         bq.add( gidQ, Occur.MUST );
@@ -138,25 +140,28 @@ public class App
         bq = new BooleanQuery();
         bq.add( gidQ, Occur.MUST );
         bq.add( aidQ, Occur.MUST );
-        bq.add( nexusIndexer.constructQuery( MAVEN.CLASSIFIER, "*", SearchType.EXACT ), Occur.MUST_NOT );
+        bq.add( nexusIndexer.constructQuery( MAVEN.CLASSIFIER, new SourcedSearchExpression( "*" ) ), Occur.MUST_NOT );
 
         searchAndDump( nexusIndexer, "main artifacts under GA org.apache.maven.indexer:indexer-artifact", bq );
 
         // doing sha1 search
-        searchAndDump( nexusIndexer, "SHA1 7ab67e6b20e5332a7fb4fdf2f019aec4275846c2",
-            nexusIndexer.constructQuery( MAVEN.SHA1, "7ab67e6b20e5332a7fb4fdf2f019aec4275846c2", SearchType.EXACT ) );
+        searchAndDump( nexusIndexer, "SHA1 7ab67e6b20e5332a7fb4fdf2f019aec4275846c2", nexusIndexer.constructQuery(
+            MAVEN.SHA1, new SourcedSearchExpression( "7ab67e6b20e5332a7fb4fdf2f019aec4275846c2" ) ) );
 
         searchAndDump( nexusIndexer, "SHA1 7ab67e6b20 (partial hash)",
-            nexusIndexer.constructQuery( MAVEN.SHA1, "7ab67e6b20", SearchType.SCORED ) );
+            nexusIndexer.constructQuery( MAVEN.SHA1, new UserInputSearchExpression( "7ab67e6b20" ) ) );
 
         // doing classname search (incomplete classname)
         searchAndDump( nexusIndexer, "classname DefaultNexusIndexer",
-            nexusIndexer.constructQuery( MAVEN.CLASSNAMES, "DefaultNexusIndexer", SearchType.SCORED ) );
+            nexusIndexer.constructQuery( MAVEN.CLASSNAMES, new UserInputSearchExpression( "DefaultNexusIndexer" ) ) );
 
         // doing search for all "canonical" maven plugins latest versions
         bq = new BooleanQuery();
-        bq.add( nexusIndexer.constructQuery( MAVEN.PACKAGING, "maven-plugin", SearchType.EXACT ), Occur.MUST );
-        bq.add( nexusIndexer.constructQuery( MAVEN.GROUP_ID, "org.apache.maven.plugins", SearchType.EXACT ), Occur.MUST );
+        bq.add( nexusIndexer.constructQuery( MAVEN.PACKAGING, new SourcedSearchExpression( "maven-plugin" ) ),
+            Occur.MUST );
+        bq.add(
+            nexusIndexer.constructQuery( MAVEN.GROUP_ID, new SourcedSearchExpression( "org.apache.maven.plugins" ) ),
+            Occur.MUST );
         searchGroupedAndDump( nexusIndexer, "all \"canonical\" maven plugins", bq, new GAGrouping() );
 
         // close cleanly
@@ -176,7 +181,7 @@ public class App
         }
 
         System.out.println( "------" );
-        System.out.println( "Total: " + response.getTotalHits() );
+        System.out.println( "Total: " + response.getTotalHitsCount() );
         System.out.println();
     }
 
@@ -198,7 +203,7 @@ public class App
         }
 
         System.out.println( "------" );
-        System.out.println( "Total record hits: " + response.getTotalHits() );
+        System.out.println( "Total record hits: " + response.getTotalHitsCount() );
         System.out.println();
     }
 }
