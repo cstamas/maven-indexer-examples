@@ -7,6 +7,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.lucene.document.Document;
+import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
@@ -20,6 +22,7 @@ import org.apache.maven.index.Grouping;
 import org.apache.maven.index.MAVEN;
 import org.apache.maven.index.NexusIndexer;
 import org.apache.maven.index.context.IndexCreator;
+import org.apache.maven.index.context.IndexUtils;
 import org.apache.maven.index.context.IndexingContext;
 import org.apache.maven.index.expr.SourcedSearchExpression;
 import org.apache.maven.index.expr.UserInputSearchExpression;
@@ -35,6 +38,7 @@ import org.apache.maven.wagon.events.TransferListener;
 import org.apache.maven.wagon.observers.AbstractTransferListener;
 import org.codehaus.plexus.DefaultPlexusContainer;
 import org.codehaus.plexus.util.StringUtils;
+import org.sonatype.aether.artifact.Artifact;
 
 /**
  * Hello world!
@@ -64,7 +68,7 @@ public class App
         // Create context for central repository index
         IndexingContext centralContext =
             nexusIndexer.addIndexingContextForced( "central-context", "central", centralLocalCache, centralIndexDir,
-                "http://repo1.maven.org/maven2", null, indexers );
+                                                   "http://repo1.maven.org/maven2", null, indexers );
 
         // Update the index (incremental update will happen if this is not 1st run and files are not deleted)
         // This whole block below should not be executed on every app start, but rather controlled by some configuration
@@ -111,7 +115,7 @@ public class App
             else
             {
                 System.out.println( "Incremental update happened, change covered " + centralContextCurrentTimestamp
-                    + " - " + updateResult.getTimestamp() + " period." );
+                                        + " - " + updateResult.getTimestamp() + " period." );
             }
 
             System.out.println();
@@ -122,13 +126,41 @@ public class App
         System.out.println( "===========" );
         System.out.println();
 
+        // dump all the GAVs
+        centralContext.lock();
+
+        try
+        {
+            final IndexReader ir = centralContext.getIndexReader();
+
+            for ( int i = 0; i < ir.maxDoc(); i++ )
+            {
+                if ( !ir.isDeleted( i ) )
+                {
+                    final Document doc = ir.document( i );
+
+                    final ArtifactInfo ai = IndexUtils.constructArtifactInfo( doc, centralContext );
+
+                    System.out.println(
+                        ai.groupId + ":" + ai.artifactId + ":" + ai.version + ":" + ai.classifier + " (sha1=" + ai.sha1
+                            + ")" );
+                }
+            }
+
+        }
+        finally
+        {
+            centralContext.unlock();
+        }
+
         // Use index
         BooleanQuery bq;
 
         // Searching for some artifact
         Query gidQ =
             nexusIndexer.constructQuery( MAVEN.GROUP_ID, new SourcedSearchExpression( "org.apache.maven.indexer" ) );
-        Query aidQ = nexusIndexer.constructQuery( MAVEN.ARTIFACT_ID, new SourcedSearchExpression( "indexer-artifact" ) );
+        Query aidQ =
+            nexusIndexer.constructQuery( MAVEN.ARTIFACT_ID, new SourcedSearchExpression( "indexer-artifact" ) );
 
         bq = new BooleanQuery();
         bq.add( gidQ, Occur.MUST );
@@ -140,7 +172,7 @@ public class App
         bq = new BooleanQuery();
         bq.add( gidQ, Occur.MUST );
         bq.add( aidQ, Occur.MUST );
-        bq.add( nexusIndexer.constructQuery( MAVEN.CLASSIFIER, new SourcedSearchExpression( "*" ) ), Occur.MUST_NOT );
+        //bq.add( nexusIndexer.constructQuery( MAVEN.CLASSIFIER, new SourcedSearchExpression( "*" ) ), Occur.MUST_NOT );
 
         searchAndDump( nexusIndexer, "main artifacts under GA org.apache.maven.indexer:indexer-artifact", bq );
 
@@ -149,16 +181,17 @@ public class App
             MAVEN.SHA1, new SourcedSearchExpression( "7ab67e6b20e5332a7fb4fdf2f019aec4275846c2" ) ) );
 
         searchAndDump( nexusIndexer, "SHA1 7ab67e6b20 (partial hash)",
-            nexusIndexer.constructQuery( MAVEN.SHA1, new UserInputSearchExpression( "7ab67e6b20" ) ) );
+                       nexusIndexer.constructQuery( MAVEN.SHA1, new UserInputSearchExpression( "7ab67e6b20" ) ) );
 
         // doing classname search (incomplete classname)
         searchAndDump( nexusIndexer, "classname DefaultNexusIndexer",
-            nexusIndexer.constructQuery( MAVEN.CLASSNAMES, new UserInputSearchExpression( "DefaultNexusIndexer" ) ) );
+                       nexusIndexer.constructQuery( MAVEN.CLASSNAMES,
+                                                    new UserInputSearchExpression( "DefaultNexusIndexer" ) ) );
 
         // doing search for all "canonical" maven plugins latest versions
         bq = new BooleanQuery();
         bq.add( nexusIndexer.constructQuery( MAVEN.PACKAGING, new SourcedSearchExpression( "maven-plugin" ) ),
-            Occur.MUST );
+                Occur.MUST );
         bq.add(
             nexusIndexer.constructQuery( MAVEN.GROUP_ID, new SourcedSearchExpression( "org.apache.maven.plugins" ) ),
             Occur.MUST );
@@ -198,7 +231,7 @@ public class App
             System.out.println( "* Plugin " + ai.artifactId );
             System.out.println( "  Latest version:  " + ai.version );
             System.out.println( StringUtils.isBlank( ai.description ) ? "No description in plugin's POM."
-                : StringUtils.abbreviate( ai.description, 60 ) );
+                                    : StringUtils.abbreviate( ai.description, 60 ) );
             System.out.println();
         }
 

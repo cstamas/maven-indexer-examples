@@ -32,7 +32,7 @@
     <dependency>
       <groupId>org.apache.maven.wagon</groupId>
       <artifactId>wagon-http-lightweight</artifactId>
-      <version>1.0-beta-7</version>
+      <version>1.0</version>
       <scope>compile</scope>
     </dependency>
 
