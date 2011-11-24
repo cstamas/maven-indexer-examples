@@ -13,12 +13,15 @@ import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
 import org.apache.maven.index.ArtifactInfo;
+import org.apache.maven.index.ArtifactInfoFilter;
 import org.apache.maven.index.ArtifactInfoGroup;
 import org.apache.maven.index.FlatSearchRequest;
 import org.apache.maven.index.FlatSearchResponse;
 import org.apache.maven.index.GroupedSearchRequest;
 import org.apache.maven.index.GroupedSearchResponse;
 import org.apache.maven.index.Grouping;
+import org.apache.maven.index.IteratorSearchRequest;
+import org.apache.maven.index.IteratorSearchResponse;
 import org.apache.maven.index.MAVEN;
 import org.apache.maven.index.NexusIndexer;
 import org.apache.maven.index.context.IndexCreator;
@@ -39,6 +42,9 @@ import org.apache.maven.wagon.observers.AbstractTransferListener;
 import org.codehaus.plexus.DefaultPlexusContainer;
 import org.codehaus.plexus.util.StringUtils;
 import org.sonatype.aether.artifact.Artifact;
+import org.sonatype.aether.util.version.GenericVersionScheme;
+import org.sonatype.aether.version.InvalidVersionSpecificationException;
+import org.sonatype.aether.version.Version;
 
 /**
  * Hello world!
@@ -126,7 +132,11 @@ public class App
         System.out.println( "===========" );
         System.out.println();
 
+        // Case:
         // dump all the GAVs
+        // will not do this below, is too long to do, but is good example
+        /*
+
         centralContext.lock();
 
         try
@@ -152,7 +162,63 @@ public class App
         {
             centralContext.unlock();
         }
+        */
 
+        // Case:
+        // Search for all GAVs with known G and A and having version greater than V
+
+        final GenericVersionScheme versionScheme = new GenericVersionScheme();
+        final String versionString = "1.5.0";
+        final Version version = versionScheme.parseVersion( versionString );
+
+        centralContext.lock();
+
+        try
+        {
+            // construct the query for known GA
+            final Query groupIdQ =
+                nexusIndexer.constructQuery( MAVEN.GROUP_ID, new SourcedSearchExpression( "org.sonatype.nexus" ) );
+            final Query artifactIdQ =
+                nexusIndexer.constructQuery( MAVEN.ARTIFACT_ID, new SourcedSearchExpression( "nexus-api" ) );
+            final BooleanQuery query = new BooleanQuery();
+            query.add( groupIdQ, Occur.MUST );
+            query.add( artifactIdQ, Occur.MUST );
+
+            // construct the filter to express V greater than
+            final ArtifactInfoFilter filter = new ArtifactInfoFilter()
+            {
+                public boolean accepts( final IndexingContext ctx, final ArtifactInfo ai )
+                {
+                    try
+                    {
+                        final Version aiV = versionScheme.parseVersion( ai.version );
+                        // Use ">=" if you are INCLUSIVE
+                        return aiV.compareTo( version ) > 0;
+                    }
+                    catch ( InvalidVersionSpecificationException e )
+                    {
+                        // do something here? be safe and include?
+                        return true;
+                    }
+                }
+            };
+
+            final IteratorSearchRequest request = new IteratorSearchRequest( query, filter );
+
+            final IteratorSearchResponse response = nexusIndexer.searchIterator( request );
+
+            for ( ArtifactInfo ai : response )
+            {
+                System.out.println( ai.toString() );
+            }
+
+        }
+        finally
+        {
+            centralContext.unlock();
+        }
+
+        // Case:
         // Use index
         BooleanQuery bq;
 
