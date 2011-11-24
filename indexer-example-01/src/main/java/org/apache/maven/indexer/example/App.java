@@ -3,6 +3,7 @@ package org.apache.maven.indexer.example;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +13,7 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
+import org.apache.maven.index.AndMultiArtifactInfoFilter;
 import org.apache.maven.index.ArtifactInfo;
 import org.apache.maven.index.ArtifactInfoFilter;
 import org.apache.maven.index.ArtifactInfoGroup;
@@ -185,7 +187,7 @@ public class App
             query.add( artifactIdQ, Occur.MUST );
 
             // construct the filter to express V greater than
-            final ArtifactInfoFilter filter = new ArtifactInfoFilter()
+            final ArtifactInfoFilter versionFilter = new ArtifactInfoFilter()
             {
                 public boolean accepts( final IndexingContext ctx, final ArtifactInfo ai )
                 {
@@ -202,8 +204,16 @@ public class App
                     }
                 }
             };
+            final ArtifactInfoFilter mainArtifactFilter = new ArtifactInfoFilter()
+            {
+                public boolean accepts( final IndexingContext ctx, final ArtifactInfo ai )
+                {
+                    return "jar".equals( ai.packaging ) && StringUtils.isBlank( ai.classifier );
+                }
+            };
 
-            final IteratorSearchRequest request = new IteratorSearchRequest( query, filter );
+            final IteratorSearchRequest request = new IteratorSearchRequest( query, new AndMultiArtifactInfoFilter(
+                Arrays.asList( versionFilter, mainArtifactFilter ) ) );
 
             final IteratorSearchResponse response = nexusIndexer.searchIterator( request );
 
