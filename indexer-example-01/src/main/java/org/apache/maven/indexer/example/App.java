@@ -17,6 +17,7 @@ import org.apache.maven.index.AndMultiArtifactInfoFilter;
 import org.apache.maven.index.ArtifactInfo;
 import org.apache.maven.index.ArtifactInfoFilter;
 import org.apache.maven.index.ArtifactInfoGroup;
+import org.apache.maven.index.Field;
 import org.apache.maven.index.FlatSearchRequest;
 import org.apache.maven.index.FlatSearchResponse;
 import org.apache.maven.index.GroupedSearchRequest;
@@ -186,6 +187,15 @@ public class App
             query.add( groupIdQ, Occur.MUST );
             query.add( artifactIdQ, Occur.MUST );
 
+            // we want "jar" artifacts only
+            query.add( nexusIndexer.constructQuery( MAVEN.PACKAGING, new SourcedSearchExpression( "jar" ) ),
+                       Occur.MUST );
+            // we want main artifacts only (no classifier)
+            // Note: this below is unfinished API, needs fixing
+            query.add(
+                nexusIndexer.constructQuery( MAVEN.CLASSIFIER, new SourcedSearchExpression( Field.NOT_PRESENT ) ),
+                Occur.MUST_NOT );
+
             // construct the filter to express V greater than
             final ArtifactInfoFilter versionFilter = new ArtifactInfoFilter()
             {
@@ -204,16 +214,8 @@ public class App
                     }
                 }
             };
-            final ArtifactInfoFilter mainArtifactFilter = new ArtifactInfoFilter()
-            {
-                public boolean accepts( final IndexingContext ctx, final ArtifactInfo ai )
-                {
-                    return "jar".equals( ai.packaging ) && StringUtils.isBlank( ai.classifier );
-                }
-            };
 
-            final IteratorSearchRequest request = new IteratorSearchRequest( query, new AndMultiArtifactInfoFilter(
-                Arrays.asList( versionFilter, mainArtifactFilter ) ) );
+            final IteratorSearchRequest request = new IteratorSearchRequest( query, versionFilter );
 
             final IteratorSearchResponse response = nexusIndexer.searchIterator( request );
 
