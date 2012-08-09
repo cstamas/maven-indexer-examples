@@ -25,7 +25,7 @@
     <dependency>
       <groupId>org.apache.maven.indexer</groupId>
       <artifactId>indexer-core</artifactId>
-      <version>4.1.1</version>
+      <version>5.0.0-SNAPSHOT</version>
       <scope>compile</scope>
     </dependency>
     <!-- For ResourceFetcher implementation, if used -->
