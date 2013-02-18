@@ -3,6 +3,7 @@ package org.apache.maven.indexer.example;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +73,8 @@ public class App
 
     private final Wagon httpWagon;
 
+    private IndexingContext centralContext;
+
     public App()
         throws PlexusContainerException, ComponentLookupException
     {
@@ -104,9 +107,9 @@ public class App
         indexers.add( plexusContainer.lookup( IndexCreator.class, "maven-plugin" ) );
 
         // Create context for central repository index
-        IndexingContext centralContext =
+        centralContext =
             indexer.createIndexingContext( "central-context", "central", centralLocalCache, centralIndexDir,
-                                           "http://repo1.maven.org/maven2", null, true, true, indexers );
+                "http://repo1.maven.org/maven2", null, true, true, indexers );
 
         // Update the index (incremental update will happen if this is not 1st run and files are not deleted)
         // This whole block below should not be executed on every app start, but rather controlled by some configuration
@@ -151,7 +154,7 @@ public class App
             else
             {
                 System.out.println( "Incremental update happened, change covered " + centralContextCurrentTimestamp
-                                        + " - " + updateResult.getTimestamp() + " period." );
+                    + " - " + updateResult.getTimestamp() + " period." );
             }
 
             System.out.println();
@@ -165,7 +168,8 @@ public class App
         // ====
         // Case:
         // dump all the GAVs
-        // NOTE: will not actually execute do this below, is too long to do (Central is HUGE), but is here as code example
+        // NOTE: will not actually execute do this below, is too long to do (Central is HUGE), but is here as code
+        // example
         if ( false )
         {
             final IndexSearcher searcher = centralContext.acquireIndexSearcher();
@@ -179,7 +183,7 @@ public class App
                         final Document doc = ir.document( i );
                         final ArtifactInfo ai = IndexUtils.constructArtifactInfo( doc, centralContext );
                         System.out.println( ai.groupId + ":" + ai.artifactId + ":" + ai.version + ":" + ai.classifier
-                                                + " (sha1=" + ai.sha1 + ")" );
+                            + " (sha1=" + ai.sha1 + ")" );
                     }
                 }
             }
@@ -211,7 +215,7 @@ public class App
         // we want main artifacts only (no classifier)
         // Note: this below is unfinished API, needs fixing
         query.add( indexer.constructQuery( MAVEN.CLASSIFIER, new SourcedSearchExpression( Field.NOT_PRESENT ) ),
-                   Occur.MUST_NOT );
+            Occur.MUST_NOT );
 
         // construct the filter to express "V greater than"
         final ArtifactInfoFilter versionFilter = new ArtifactInfoFilter()
@@ -232,7 +236,9 @@ public class App
             }
         };
 
-        final IteratorSearchRequest request = new IteratorSearchRequest( query, versionFilter );
+        System.out.println( "Searching for all GAVs with G=org.sonatype.nexus and nexus-api and having V greater than 1.5.0" );
+        final IteratorSearchRequest request =
+            new IteratorSearchRequest( query, Collections.singletonList( centralContext ), versionFilter );
         final IteratorSearchResponse response = indexer.searchIterator( request );
         for ( ArtifactInfo ai : response )
         {
@@ -242,10 +248,8 @@ public class App
         // Case:
         // Use index
         // Searching for some artifact
-        Query gidQ =
-            indexer.constructQuery( MAVEN.GROUP_ID, new SourcedSearchExpression( "org.apache.maven.indexer" ) );
-        Query aidQ =
-            indexer.constructQuery( MAVEN.ARTIFACT_ID, new SourcedSearchExpression( "indexer-artifact" ) );
+        Query gidQ = indexer.constructQuery( MAVEN.GROUP_ID, new SourcedSearchExpression( "org.apache.maven.indexer" ) );
+        Query aidQ = indexer.constructQuery( MAVEN.ARTIFACT_ID, new SourcedSearchExpression( "indexer-artifact" ) );
 
         BooleanQuery bq = new BooleanQuery();
         bq.add( gidQ, Occur.MUST );
@@ -263,24 +267,20 @@ public class App
         searchAndDump( indexer, "main artifacts under GA org.apache.maven.indexer:indexer-artifact", bq );
 
         // doing sha1 search
-        searchAndDump( indexer, "SHA1 7ab67e6b20e5332a7fb4fdf2f019aec4275846c2", indexer.constructQuery(
-            MAVEN.SHA1, new SourcedSearchExpression( "7ab67e6b20e5332a7fb4fdf2f019aec4275846c2" ) ) );
+        searchAndDump( indexer, "SHA1 7ab67e6b20e5332a7fb4fdf2f019aec4275846c2", indexer.constructQuery( MAVEN.SHA1,
+            new SourcedSearchExpression( "7ab67e6b20e5332a7fb4fdf2f019aec4275846c2" ) ) );
 
         searchAndDump( indexer, "SHA1 7ab67e6b20 (partial hash)",
-                       indexer.constructQuery( MAVEN.SHA1, new UserInputSearchExpression( "7ab67e6b20" ) ) );
+            indexer.constructQuery( MAVEN.SHA1, new UserInputSearchExpression( "7ab67e6b20" ) ) );
 
         // doing classname search (incomplete classname)
-        searchAndDump( indexer,
-                       "classname DefaultNexusIndexer (note: Central does not publish classes in the index)",
-                       indexer.constructQuery( MAVEN.CLASSNAMES,
-                                               new UserInputSearchExpression( "DefaultNexusIndexer" ) ) );
+        searchAndDump( indexer, "classname DefaultNexusIndexer (note: Central does not publish classes in the index)",
+            indexer.constructQuery( MAVEN.CLASSNAMES, new UserInputSearchExpression( "DefaultNexusIndexer" ) ) );
 
         // doing search for all "canonical" maven plugins latest versions
         bq = new BooleanQuery();
-        bq.add( indexer.constructQuery( MAVEN.PACKAGING, new SourcedSearchExpression( "maven-plugin" ) ),
-                Occur.MUST );
-        bq.add(
-            indexer.constructQuery( MAVEN.GROUP_ID, new SourcedSearchExpression( "org.apache.maven.plugins" ) ),
+        bq.add( indexer.constructQuery( MAVEN.PACKAGING, new SourcedSearchExpression( "maven-plugin" ) ), Occur.MUST );
+        bq.add( indexer.constructQuery( MAVEN.GROUP_ID, new SourcedSearchExpression( "org.apache.maven.plugins" ) ),
             Occur.MUST );
         searchGroupedAndDump( indexer, "all \"canonical\" maven plugins", bq, new GAGrouping() );
 
@@ -288,12 +288,12 @@ public class App
         indexer.closeIndexingContext( centralContext, false );
     }
 
-    public static void searchAndDump( Indexer nexusIndexer, String descr, Query q )
+    public void searchAndDump( Indexer nexusIndexer, String descr, Query q )
         throws IOException
     {
         System.out.println( "Searching for " + descr );
 
-        FlatSearchResponse response = nexusIndexer.searchFlat( new FlatSearchRequest( q ) );
+        FlatSearchResponse response = nexusIndexer.searchFlat( new FlatSearchRequest( q, centralContext ) );
 
         for ( ArtifactInfo ai : response.getResults() )
         {
@@ -305,12 +305,12 @@ public class App
         System.out.println();
     }
 
-    public static void searchGroupedAndDump( Indexer nexusIndexer, String descr, Query q, Grouping g )
+    public void searchGroupedAndDump( Indexer nexusIndexer, String descr, Query q, Grouping g )
         throws IOException
     {
         System.out.println( "Searching for " + descr );
 
-        GroupedSearchResponse response = nexusIndexer.searchGrouped( new GroupedSearchRequest( q, g ) );
+        GroupedSearchResponse response = nexusIndexer.searchGrouped( new GroupedSearchRequest( q, g, centralContext ) );
 
         for ( Map.Entry<String, ArtifactInfoGroup> entry : response.getResults().entrySet() )
         {
@@ -318,7 +318,7 @@ public class App
             System.out.println( "* Plugin " + ai.artifactId );
             System.out.println( "  Latest version:  " + ai.version );
             System.out.println( StringUtils.isBlank( ai.description ) ? "No description in plugin's POM."
-                                    : StringUtils.abbreviate( ai.description, 60 ) );
+                : StringUtils.abbreviate( ai.description, 60 ) );
             System.out.println();
         }
 
