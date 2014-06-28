@@ -10,10 +10,12 @@ import java.util.Map;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.util.Bits;
 import org.apache.maven.index.ArtifactInfo;
 import org.apache.maven.index.ArtifactInfoFilter;
 import org.apache.maven.index.ArtifactInfoGroup;
@@ -47,9 +49,9 @@ import org.codehaus.plexus.PlexusContainer;
 import org.codehaus.plexus.PlexusContainerException;
 import org.codehaus.plexus.component.repository.exception.ComponentLookupException;
 import org.codehaus.plexus.util.StringUtils;
-import org.sonatype.aether.util.version.GenericVersionScheme;
-import org.sonatype.aether.version.InvalidVersionSpecificationException;
-import org.sonatype.aether.version.Version;
+import org.eclipse.aether.util.version.GenericVersionScheme;
+import org.eclipse.aether.version.InvalidVersionSpecificationException;
+import org.eclipse.aether.version.Version;
 
 /**
  * Hello world!
@@ -176,14 +178,15 @@ public class App
             try
             {
                 final IndexReader ir = searcher.getIndexReader();
+                Bits liveDocs = MultiFields.getLiveDocs(ir);
                 for ( int i = 0; i < ir.maxDoc(); i++ )
                 {
-                    if ( !ir.isDeleted( i ) )
+                    if ( liveDocs == null || liveDocs.get( i ) )
                     {
                         final Document doc = ir.document( i );
                         final ArtifactInfo ai = IndexUtils.constructArtifactInfo( doc, centralContext );
-                        System.out.println( ai.groupId + ":" + ai.artifactId + ":" + ai.version + ":" + ai.classifier
-                            + " (sha1=" + ai.sha1 + ")" );
+                        System.out.println( ai.getGroupId() + ":" + ai.getArtifactId() + ":" + ai.getVersion() + ":" + ai.getClassifier()
+                            + " (sha1=" + ai.getSha1() + ")" );
                     }
                 }
             }
@@ -224,7 +227,7 @@ public class App
             {
                 try
                 {
-                    final Version aiV = versionScheme.parseVersion( ai.version );
+                    final Version aiV = versionScheme.parseVersion( ai.getVersion() );
                     // Use ">=" if you are INCLUSIVE
                     return aiV.compareTo( version ) > 0;
                 }
@@ -315,10 +318,10 @@ public class App
         for ( Map.Entry<String, ArtifactInfoGroup> entry : response.getResults().entrySet() )
         {
             ArtifactInfo ai = entry.getValue().getArtifactInfos().iterator().next();
-            System.out.println( "* Plugin " + ai.artifactId );
-            System.out.println( "  Latest version:  " + ai.version );
-            System.out.println( StringUtils.isBlank( ai.description ) ? "No description in plugin's POM."
-                : StringUtils.abbreviate( ai.description, 60 ) );
+            System.out.println( "* Plugin " + ai.getArtifactId() );
+            System.out.println( "  Latest version:  " + ai.getVersion() );
+            System.out.println( StringUtils.isBlank( ai.getDescription() ) ? "No description in plugin's POM."
+                : StringUtils.abbreviate( ai.getDescription(), 60 ) );
             System.out.println();
         }
 
