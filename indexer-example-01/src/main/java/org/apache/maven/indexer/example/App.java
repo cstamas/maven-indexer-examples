@@ -287,6 +287,10 @@ public class App
             Occur.MUST );
         searchGroupedAndDump( indexer, "all \"canonical\" maven plugins", bq, new GAGrouping() );
 
+        // doing search for all archetypes latest versions
+        searchGroupedAndDump( indexer, "all maven archetypes (latest versions)", 
+                              indexer.constructQuery( MAVEN.PACKAGING, new SourcedSearchExpression( "maven-archetype" ) ), new GAGrouping() );
+
         // close cleanly
         indexer.closeIndexingContext( centralContext, false );
     }
@@ -318,7 +322,7 @@ public class App
         for ( Map.Entry<String, ArtifactInfoGroup> entry : response.getResults().entrySet() )
         {
             ArtifactInfo ai = entry.getValue().getArtifactInfos().iterator().next();
-            System.out.println( "* Plugin " + ai.getArtifactId() );
+            System.out.println( "* Entry " + ai );
             System.out.println( "  Latest version:  " + ai.getVersion() );
             System.out.println( StringUtils.isBlank( ai.getDescription() ) ? "No description in plugin's POM."
                 : StringUtils.abbreviate( ai.getDescription(), 60 ) );
